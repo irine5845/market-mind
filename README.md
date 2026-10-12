@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # MarketMind AI (core build)
 PHP 8+ / MySQL / Bootstrap / Chart.js stock intelligence platform.
 
@@ -14,3 +15,6 @@ Auth (hashed passwords, sessions, CSRF), market data + history, line chart with 
 - Market data uses Yahoo Finance's unofficial endpoint, falling back to clearly labelled demo data. Replace `hist()` in api.php with a licensed provider for production.
 - Not financial advice; no real-money trading.
 - Promote an admin: `UPDATE users SET role='admin' WHERE email='you@x.com';`
+=======
+# market-mind
+>>>>>>> 91b00d78cf6f8a7c76c77fcf1c91c551224840af
