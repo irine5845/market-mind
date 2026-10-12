@@ -1,0 +1,47 @@
+<!doctype html><html lang="en" data-bs-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MarketMind AI</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>.up{color:#2ecc71}.dn{color:#e74c3c}pre{white-space:pre-wrap}</style></head><body>
+<nav class="navbar bg-body-tertiary px-3"><b>📈 MarketMind AI</b><span id="who" class="small"></span></nav>
+<div class="container py-3">
+<div id="auth" class="card p-3 mx-auto" style="max-width:380px"><h5>Sign in</h5>
+<input id="em" class="form-control mb-2" placeholder="Email"><input id="pw" type="password" class="form-control mb-2" placeholder="Password (8+ chars)">
+<div class="d-flex gap-2"><button class="btn btn-primary" onclick="auth('login')">Login</button><button class="btn btn-outline-secondary" onclick="auth('register')">Register</button></div><div id="aerr" class="text-danger small mt-2"></div></div>
+<div id="app" hidden>
+<ul class="nav nav-pills mb-3" id="tabs"></ul>
+<section id="t-Markets"><div class="input-group mb-2"><input id="sym" class="form-control" value="AAPL"><select id="rng" class="form-select" style="max-width:110px"><option>1mo</option><option selected>3mo</option><option>6mo</option><option>1y</option><option>5y</option></select><button class="btn btn-primary" onclick="load()">Go</button><button class="btn btn-outline-light" onclick="wlAdd()">+ Watch</button></div>
+<div id="qinfo" class="mb-2"></div><canvas id="ch" height="110"></canvas><div id="ind" class="my-2"></div>
+<div class="input-group"><input id="q" class="form-control" placeholder="Ask AI e.g. Explain RSI / why is this moving?"><button class="btn btn-success" onclick="ask()">Ask AI</button></div><pre id="aiout" class="mt-2"></pre></section>
+<section id="t-Watchlist" hidden></section>
+<section id="t-Alerts" hidden><div class="input-group mb-2"><input id="as" class="form-control" placeholder="Symbol"><select id="at" class="form-select"><option value="above">Price above</option><option value="below">Price below</option><option value="pct">% change &gt;</option></select><input id="av" class="form-control" placeholder="Value"><button class="btn btn-primary" onclick="alAdd()">Add</button></div><div id="alist"></div></section>
+<section id="t-Portfolio" hidden><div class="input-group mb-2"><input id="ps" class="form-control" placeholder="Symbol"><input id="pq" type="number" min="1" class="form-control" placeholder="Qty"><button class="btn btn-success" onclick="trade('buy')">Buy</button><button class="btn btn-danger" onclick="trade('sell')">Sell</button></div><div id="pf"></div></section>
+<section id="t-Notifications" hidden></section>
+<p class="text-secondary small mt-4"><b>Disclaimer:</b> MarketMind AI provides information and AI-generated analysis for educational purposes only. It is not financial, investment or trading advice.</p></div></div>
+<script>
+let csrf='',chart,cur={};const $=i=>document.getElementById(i);
+async function api(a,body,qs=''){const r=await fetch('api.php?a='+a+qs,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-CSRF':csrf},body:JSON.stringify(body)});return r.json()}
+const cls=n=>n>=0?'up':'dn',f=n=>Number(n).toFixed(2);
+async function auth(a){const r=await api(a,{email:$('em').value,password:$('pw').value});if(r.error)return $('aerr').textContent=r.error;if(a==='register'){$('aerr').textContent='Registered. Now log in.';return}start(r)}
+function start(r){csrf=r.csrf;$('auth').hidden=true;$('app').hidden=false;$('who').innerHTML=r.user+' <a href="#" onclick="api(\'logout\',{}).then(()=>location.reload())">Logout</a>';
+ $('tabs').innerHTML=['Markets','Watchlist','Alerts','Portfolio','Notifications'].map((t,i)=>`<li class="nav-item"><a class="nav-link ${i?'':'active'}" href="#" onclick="tab('${t}',this)">${t}</a></li>`).join('');load();setInterval(()=>api('al_check',{}).then(h=>h.length&&alert(h.join('\n'))),30000)}
+function tab(t,el){document.querySelectorAll('#tabs a').forEach(a=>a.classList.remove('active'));el.classList.add('active');document.querySelectorAll('section').forEach(s=>s.hidden=s.id!=='t-'+t);({Watchlist:wl,Alerts:alList,Portfolio:pf,Notifications:nt})[t]?.()}
+const sma=(a,n)=>a.map((_,i)=>i<n-1?null:a.slice(i-n+1,i+1).reduce((x,y)=>x+y)/n);
+function rsi(c,n=14){if(c.length<=n)return null;let g=0,l=0;for(let i=1;i<=n;i++){const d=c[i]-c[i-1];d>0?g+=d:l-=d}g/=n;l/=n;for(let i=n+1;i<c.length;i++){const d=c[i]-c[i-1];g=(g*(n-1)+Math.max(d,0))/n;l=(l*(n-1)+Math.max(-d,0))/n}return l?100-100/(1+g/l):100}
+async function load(){const s=$('sym').value.trim().toUpperCase(),h=await api('history',undefined,'&s='+s+'&r='+$('rng').value);if(!h.rows?.length)return;
+ const c=h.rows.map(r=>r.c),s20=sma(c,20),s50=sma(c,50),R=rsi(c),last=c.at(-1),prev=c.at(-2)||last,pct=(last-prev)/prev*100;
+ const avgV=h.rows.slice(-20).reduce((a,r)=>a+r.v,0)/Math.min(20,h.rows.length);
+ cur={symbol:s,price:+f(last),pct_change:+f(pct),sma20:s20.at(-1)&&+f(s20.at(-1)),sma50:s50.at(-1)&&+f(s50.at(-1)),rsi14:R&&+f(R),volume:h.rows.at(-1).v,avg_volume_20d:Math.round(avgV),recent_closes:c.slice(-10).map(x=>+f(x))};
+ $('qinfo').innerHTML=`<h4>${s} $${f(last)} <small class="${cls(pct)}">${pct>=0?'+':''}${f(pct)}%</small>${h.demo?' <span class="badge bg-warning text-dark">demo data</span>':''}</h4>`;
+ $('ind').innerHTML=`SMA20: <b>${s20.at(-1)?f(s20.at(-1)):'–'}</b> · SMA50: <b>${s50.at(-1)?f(s50.at(-1)):'–'}</b> · RSI14: <b>${R?f(R):'–'}</b> <span class="text-secondary">${R?(R<30?'(potentially oversold)':R>70?'(potentially overbought)':'(neutral range)'):''}</span> · Volume vs 20d avg: <b>${f(cur.volume/avgV)}x</b>`;
+ chart?.destroy();chart=new Chart($('ch'),{type:'line',data:{labels:h.rows.map(r=>r.t),datasets:[{label:'Close',data:c,borderColor:'#4da3ff',pointRadius:0},{label:'SMA20',data:s20,borderColor:'#f1c40f',pointRadius:0,borderDash:[4,3]},{label:'SMA50',data:s50,borderColor:'#e67e22',pointRadius:0,borderDash:[4,3]}]},options:{interaction:{mode:'index',intersect:false}}})}
+async function ask(){$('aiout').textContent='Thinking…';const r=await api('ai',{context:cur,question:$('q').value||undefined});$('aiout').textContent=r.text||r.error}
+async function wlAdd(){await api('wl_add',{symbol:$('sym').value});alert('Added to watchlist')}
+async function wl(){const r=await api('wl_list');$('t-Watchlist').innerHTML='<table class="table"><tbody>'+r.map(q=>`<tr><td><b>${q.symbol}</b></td><td>$${f(q.price)}</td><td class="${cls(q.pct)}">${f(q.pct)}%</td><td><button class="btn btn-sm btn-outline-danger" onclick="api('wl_del',{symbol:'${q.symbol}'}).then(wl)">✕</button></td></tr>`).join('')+'</tbody></table>'||'Empty'}
+async function alAdd(){const r=await api('al_add',{symbol:$('as').value,type:$('at').value,value:$('av').value});if(r.error)alert(r.error);alList()}
+async function alList(){const r=await api('al_list');$('alist').innerHTML='<table class="table">'+r.map(a=>`<tr><td>${a.symbol}</td><td>${a.type} ${a.value}</td><td>${a.active==1?'active':'triggered '+a.triggered_at}</td><td><button class="btn btn-sm btn-outline-danger" onclick="api('al_del',{id:${a.id}}).then(alList)">✕</button></td></tr>`).join('')+'</table>'}
+async function trade(side){const r=await api('trade',{symbol:$('ps').value,qty:$('pq').value,side});if(r.error)alert(r.error);pf()}
+async function pf(){const p=await api('pf_get');$('pf').innerHTML=`<p>Value <b>$${f(p.total)}</b> · Cash $${f(p.cash)} · Return <b class="${cls(p.return_pct)}">${f(p.return_pct)}%</b></p><table class="table"><tr><th>Symbol</th><th>Qty</th><th>Avg</th><th>Price</th><th>P/L</th></tr>`+p.holdings.map(h=>`<tr><td>${h.symbol}</td><td>${h.qty}</td><td>${h.avg_cost}</td><td>${h.price}</td><td class="${cls(h.pl)}">${h.pl}</td></tr>`).join('')+'</table>'}
+async function nt(){const r=await api('notifs');$('t-Notifications').innerHTML=r.map(n=>`<div class="border-bottom py-1">${n.message} <small class="text-secondary">${n.created_at}</small></div>`).join('')||'No notifications'}
+api('me').then(r=>r.user&&start(r));
+</script></body></html>
